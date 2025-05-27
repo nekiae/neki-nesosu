@@ -1,42 +1,49 @@
 using System.Collections;
-using System.Runtime.CompilerServices;
 using TMPro;
-using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.AI;
 
 public class TopDownPlayerController : MonoBehaviour
 {
     [Header("Movement Settings")]
-    [SerializeField] public float moveSpeed = 5f;
-    [SerializeField] public float acceleration = 15f;
-    [SerializeField] public float deceleration = 50f;
-    
-    [SerializeField] public GameObject textUI;
+    public float moveSpeed = 5f;
+    public float acceleration = 15f;
+    public float deceleration = 50f;
 
-    [Header("Anim")]
+    public GameObject textUI;
 
-    [SerializeField] public Vector3 tableCoord = new(3.03f, 0.53f, -0.1f);
+    [Header("Animation")]
+    public Vector3 tableCoord = new(3.03f, 0.53f, -0.1f);
+
+    [Header("Dialogs")]
+    public TextController dialogController;
+
+
+    private NavMeshAgent navigationAgent;
 
     private bool nearTable = false;
 
     private Vector2 moveInput;
     private Vector2 currentVelocity;
+    
     private Rigidbody2D rb;
 
     private TextMeshProUGUI pressE;
 
     private PlayerInput playerInput;
-    
+
     public void Start()
     {
         // Get required components
         rb = GetComponent<Rigidbody2D>();
-        
         pressE = textUI.GetComponent<TextMeshProUGUI>();
-
         playerInput = FindFirstObjectByType<PlayerInput>();
-        
+        navigationAgent = GetComponent<NavMeshAgent>();
+
+        //Setup navigationAgent
+        navigationAgent.updateRotation = false;
+        navigationAgent.updateUpAxis = false;
 
     }
 
@@ -50,19 +57,23 @@ public class TopDownPlayerController : MonoBehaviour
         moveInput = ctx.ReadValue<Vector2>();
 
     }
-    
-    public void OnInteract(InputAction.CallbackContext _){
-        if (nearTable){
+
+    public void OnInteract(InputAction.CallbackContext ctx)
+    {
+        if (nearTable && ctx.started)
+        {
             playerInput.enabled = false;
-            StartCoroutine(Move(gameObject.transform.position, tableCoord, 1));
+            pressE.SetText("");
+            StartCoroutine(Interaction());
+            
+            
         }
     }
 
     void HandleMovement()
     {
         Vector2 targetVelocity = moveInput * moveSpeed;
-        
-        // Smooth acceleration/deceleration
+
         if (moveInput.magnitude > 0)
         {
             currentVelocity = Vector2.MoveTowards(currentVelocity, targetVelocity, acceleration);
@@ -71,11 +82,11 @@ public class TopDownPlayerController : MonoBehaviour
         {
             currentVelocity = Vector2.MoveTowards(currentVelocity, Vector2.zero, deceleration);
         }
-        
+
         // Apply movement
         rb.linearVelocity = currentVelocity;
     }
-    
+
     public void OnTriggerEnter2D(Collider2D collider)
     {
         if (collider.gameObject.tag == "SleepTable")
@@ -85,7 +96,7 @@ public class TopDownPlayerController : MonoBehaviour
         }
     }
 
-        public void OnTriggerExit2D(Collider2D collider)
+    public void OnTriggerExit2D(Collider2D collider)
     {
         if (collider.gameObject.tag == "SleepTable")
         {
@@ -94,12 +105,23 @@ public class TopDownPlayerController : MonoBehaviour
         }
     }
 
-    IEnumerator Move(Vector3 beginPos, Vector3 endPos, float time){
-    for(float t = 0; t < 1; t += Time.deltaTime / time){
-        moveInput = new Vector2(0,0);
-        transform.position = Vector3.Lerp(beginPos, endPos, t);
-        yield return null;
+    IEnumerator Interaction(){
+        yield return StartCoroutine(Move(tableCoord));
+        dialogController.ShowDialog("Вочы зачыняются...");
     }
-}
+
+    IEnumerator Move(Vector3 endPos)
+    {
+        navigationAgent.SetDestination(endPos);
+        while (navigationAgent.velocity == Vector3.zero)
+        {
+            yield return new WaitForFixedUpdate();
+        } 
+        while (navigationAgent.velocity != Vector3.zero)
+        {
+            yield return new WaitForFixedUpdate();
+        } 
+        
+    }
 
 }
